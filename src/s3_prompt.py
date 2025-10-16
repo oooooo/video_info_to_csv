@@ -1,9 +1,9 @@
 import sys
 import os
-import shutil  # 處理「檔案與資料夾的複製、刪除、壓縮、移動」等操作，比 os 更方便。
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
+from utils import list_files, move_file
 
 # ---------- 設定 ----------
 
@@ -17,10 +17,6 @@ load_dotenv()
 TRANS_DIR = os.getenv("TRANS_DIR")
 JSON_DIR = os.getenv("JSON_DIR")
 FINISH_DIR = os.getenv("FINISH_DIR")
-
-print(f":: 📂 TRANS_DIR: {TRANS_DIR}")
-print(f":: 📂 JSON_DIR: {JSON_DIR}")
-print(f":: 📂 FINISH_DIR: {FINISH_DIR}")
 
 # 金鑰
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -69,11 +65,10 @@ speech2 = """
 
 字幕內容如下：
 """
-
-# 建立一個空字典來存放所有檔案的處理結果
-all_results = {}  # {srt: {...}, ... }
+# 放處理結果 { filename: {...}}
 
 # ---------- 初始化 genai ----------
+
 genai.configure(api_key=GEMINI_API_KEY)
 
 # # 列出可用模型
@@ -85,25 +80,21 @@ genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
 # ---------- 處理來源 ----------
-try:
-    file_list = os.listdir(TRANS_DIR)
-except FileNotFoundError:
-    print(f":: ❌ 錯誤: 找不到資料夾 '{TRANS_DIR}'，請確認路徑是否正確。")
-    sys.exit(1)
 
-# 待處理檔案
-pending_files = [f for f in file_list if f.endswith(".srt")]
+pending_files = list_files(TRANS_DIR, ".srt")
 if not pending_files:
-    print(":: ⚠️ 沒有 待處理檔案，跳過。")
+    print(":: ⚠️ 沒有待處理檔案，跳過。")
     sys.exit(0)
 
-# 處理
+# ---------- 處理 data ----------
+all_results = {}
+
 for file_name in pending_files:
     file_path = os.path.join(TRANS_DIR, file_name)
 
-    # 進行分析
     print(f":: ⏳ 處理中： {file_name} ➜ JSON")
     try:
+        # load srt
         with open(file_path, "r", encoding="utf-8") as f:
             text = f.read()
 
@@ -113,28 +104,24 @@ for file_name in pending_files:
         請只輸出 JSON 陣列。
         """
 
-        # 以提示詞（Prompt）呼叫 Gemini
+        # 呼叫 Gemini
         response = model.generate_content(prompt)
         response_text = response.text
         cleaned_text = response_text.replace(
             "```json", "").replace("```", "").strip()
-        # print(':: cleaned_text', cleaned_text)
-        all_results[file_name] = json.loads(cleaned_text)
-        # print(':: all_results', all_results)
-        # <array> [{animal data}, {}, ...]
+        all_results[file_name] = json.loads(cleaned_text)  # [{data}, {}]
 
     except json.JSONDecodeError:
-        print(
-            f":: ⚠️ 警告: 檔案 '{file_name}' 的回應不是有效的 JSON 格式，跳過此檔案。{response.text}")
-        all_results[file_name] = f":: ❌ 錯誤: 無法解析回應為 JSON。原始回應：{response.text}"
-
+        print(f":: ⚠️ {file_name} JSON 解析失敗，跳過檔案： {response.text}")
+        all_results[file_name] = f":: ❌ JSON 解析失敗。"
+        continue
     except Exception as e:
-        print(f":: ❗️ 處理 {file_name} 時發生錯誤: {e} ---")
+        print(f":: ❌ {file_name} 發生其他錯誤: {e}")
+        continue
 
     # ---------- 來源檔案處理完，移動至 FINISH_DIR  ----------
-    dst_path = os.path.join(FINISH_DIR, file_name)
-    shutil.move(file_path, dst_path)
-    print(f":: 🚚 已移動 {file_name} 到 {FINISH_DIR}")
+    move_file(file_path, FINISH_DIR)
+    print(f":: 🚚 移動 {file_name} 到 FINISH_DIR")
 
 # ---------- 存為 JSON ----------
 for file_name, data in all_results.items():
@@ -142,11 +129,13 @@ for file_name, data in all_results.items():
     json_name = f"{base_name}.json"
     output_path = os.path.join(JSON_DIR, json_name)
 
-    # 將所有結果寫入一個 JSON 檔案
+    # write json
     try:
+        # 確保目標檔案上層資料夾存在，否則就自動建立
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as json_file:
+            # 將 Python 物件 轉成 JSON 並寫入 JSON 檔案
             json.dump(data, json_file, ensure_ascii=False, indent=4)
-            # 以 JSON 格式寫入檔案(寫入,檔案,編碼,縮排)
-        print(f":: ✅ 所有動物資訊已成功儲存至檔案：'{output_path}'")
+        print(f":: ✅ 寫入 JSON 成功，檔案在：'{output_path}'")
     except Exception as e:
         print(f":: ❌ 錯誤: {data} 無法寫入 JSON 檔案。原因：{e}")

@@ -1,13 +1,15 @@
 import sys
 import os
-import shutil
 import json
 import csv
 from dotenv import load_dotenv
+from utils import list_files, move_file
 
 # ---------- 設定 ----------
 
 print(':: 🐵 存入 CSV')
+MODE = "overwrite"  # overwrite / log / modify_only
+
 
 # 載入 .env
 load_dotenv(".env.setting")
@@ -18,65 +20,56 @@ CSV_DIR = os.getenv("CSV_DIR")
 FINISH_DIR = os.getenv("FINISH_DIR")
 CSV_FILE = CSV_DIR+"/new.csv"
 
-# 目錄
-print(f":: 📂 JSON_DIR: {JSON_DIR}")
-print(f":: 📂 CSV_FILE: {CSV_FILE}")
-print(f":: 📂 FINISH_DIR: {FINISH_DIR}")
 
-MODE = "overwrite"  # overwrite / log / modify_only
+def load_csv(path):
+    data = {}
+    headers = []
+    # 檢查檔案是否存在
+    if not os.path.exists(path):
+        # 檔案不存在，回傳空的資料和標題
+        return data, headers
+    # 讀取 CSV 檔
+    with open(path, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        # 讀取標題
+        headers = reader.fieldnames or []
+        # 讀取資料
+        for row in reader:
+            # 取得名稱
+            name = row.get("name")
+            # 將資料存入字典
+            if name:
+                # 檢查名稱是否重複
+                data[name] = row
+    return data, headers
 
-# ---------- 初始化 CSV ----------
-headers = None
-existing_data = {}
 
-if not os.path.exists(CSV_FILE):
-    print(':: 沒 CSV → 建立空檔')
-    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[])  # 建立含標題列的空白 CSV
-        writer.writeheader()
-
-with open(CSV_FILE, "r", newline="", encoding="utf-8") as f:
-    print(':: 讀取 CSV 檔案')
-    reader = csv.DictReader(f)
-    headers = reader.fieldnames or []
-    # print(':: headers:', headers)
-
-    for row in reader:
-        existing_data[row.get("name")] = row
-
-    # print(':: existing_data:', existing_data)
+# ---------- 初始化 CSV 資料 ----------
+existing_data, headers = load_csv(CSV_FILE)
 
 # ---------- 處理來源 ----------
-try:
-    file_list = os.listdir(JSON_DIR)
-except FileNotFoundError:
-    print(f":: ❌ 錯誤: 找不到資料夾 '{JSON_DIR}'，請確認路徑是否正確。")
-    sys.exit(1)
-
-# 待處理檔案
-pending_files = [f for f in file_list if f.endswith(".json")]
+pending_files = list_files(JSON_DIR, ".json")
 if not pending_files:
-    print(":: ⚠️ 沒有 待處理檔案，跳過。")
+    print(":: ⚠️ 沒有待處理檔案，跳過。")
     sys.exit(0)
 
-# 處理
+# ---------- 處理 data----------
 for file_name in pending_files:
     file_path = os.path.join(JSON_DIR, file_name)
 
     # 讀取內容
-    print(f":: ⏳ 處理中： {file_name} ➜ CSV")
+    print(f":: ⏳ 處理中：{file_name} ➜ CSV")
+
     try:
+        # load json
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
     except json.JSONDecodeError:
-        print(f":: ❌ 無法解析 JSON：{file_name}")
+        print(f":: ⚠️ {file_name} JSON 解析失敗。")
         continue
     except Exception as e:
-        print(f":: ⚠️ 無法讀取 {file_name}：{e}")
-        continue
-
-    if not isinstance(data, list) or not data:
-        print(f":: ⚠️ {file_name} 為空或不是 list，略過。")
+        print(f":: ❌ {file_name} 發生其他錯誤: {e}")
         continue
 
     # 整合筆數
@@ -121,15 +114,15 @@ for file_name in pending_files:
                 print(f":: 未找到 {name}")
 
     # ---------- 來源檔案處理完，移動至 FINISH_DIR  ----------
-    dst_path = os.path.join(FINISH_DIR, file_name)
-    shutil.move(file_path, dst_path)
-    print(f":: 🚚 已移動 {file_name} 到 {FINISH_DIR}")
+    move_file(file_path, FINISH_DIR)
+    print(f":: 🚚 處理完畢，移動 {file_name} 到 FINISH_DIR")
 
 # ---------- 寫回 CSV ----------
+os.makedirs(os.path.dirname(CSV_FILE), exist_ok=True)
 with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, headers)
     writer.writeheader()  # 將標題列寫入文件（第一行）
     for row in existing_data.values():
         writer.writerow(row)
 
-print(f":: ✅ 批次處理完成，資料已更新到 {CSV_FILE}")
+print(f":: ✅ CSV 更新完成: {CSV_FILE}")
