@@ -42,8 +42,14 @@ for file in "${file_list[@]}"; do
   name="${filename%.*}"
   echo ":: ⏳ 處理中：\"$filename\""
   eval "$CMD"
-  mv "$file" "$FINISH_DIR"
-  echo ":: 🚚 處理完成。移動 \"$filename\" 到 \"$FINISH_DIR\""
+
+  # 檢查上一個指令是否成功
+  if [ $? -eq 0 ]; then
+      mv "$file" "$FINISH_DIR"
+      echo ":: 🚚 處理完成。移動 \"$filename\" 到 \"$FINISH_DIR\""
+  else
+      echo ":: ❌ 轉檔未成功"
+  fi
 done
 
 echo ":: ✅ 轉譯檔案在 \"$DST_DIR\""
