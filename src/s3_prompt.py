@@ -6,9 +6,6 @@ from dotenv import load_dotenv
 from utils import list_files, move_file
 
 # ---------- 設定 ----------
-
-print(f":: 🙈 開始 結構化文字訊息...")
-
 # 載入 .env
 load_dotenv(".env.setting")
 load_dotenv()
@@ -81,6 +78,8 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # ---------- 處理來源 ----------
 
+print(':: 🐵 處理來源')
+
 pending_files = list_files(TRANS_DIR, ".srt")
 if not pending_files:
     print(":: ⚠️ 沒有待處理檔案，跳過。")
@@ -92,7 +91,7 @@ all_results = {}
 for file_name in pending_files:
     file_path = os.path.join(TRANS_DIR, file_name)
 
-    print(f":: ⏳ 處理中： {file_name} ➜ JSON")
+    print(f":: ⏳ 分析 {file_name} 為 JSON 格式")
     try:
         # load srt
         with open(file_path, "r", encoding="utf-8") as f:
@@ -111,6 +110,10 @@ for file_name in pending_files:
             "```json", "").replace("```", "").strip()
         all_results[file_name] = json.loads(cleaned_text)  # [{data}, {}]
 
+        # ---------- 成功則移至 FINISH_DIR  ----------
+        move_file(file_path, FINISH_DIR)
+        print(f":: 🚚 {file_name} 分析成功，移動到 {FINISH_DIR}")
+
     except json.JSONDecodeError:
         print(f":: ⚠️ {file_name} JSON 解析失敗，跳過檔案： {response.text}")
         all_results[file_name] = f":: ❌ JSON 解析失敗。"
@@ -119,11 +122,7 @@ for file_name in pending_files:
         print(f":: ❌ {file_name} 發生其他錯誤: {e}")
         continue
 
-    # ---------- 來源檔案處理完，移動至 FINISH_DIR  ----------
-    move_file(file_path, FINISH_DIR)
-    print(f":: 🚚 移動 {file_name} 到 FINISH_DIR")
-
-# ---------- 存為 JSON ----------
+# ---------- 存為 JSON 檔 ----------
 for file_name, data in all_results.items():
     base_name = os.path.splitext(file_name)[0]
     json_name = f"{base_name}.json"

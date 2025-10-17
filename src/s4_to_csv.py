@@ -7,9 +7,8 @@ from utils import list_files, move_file
 
 # ---------- 設定 ----------
 
-print(':: 🐵 存入 CSV')
 MODE = "overwrite"  # overwrite / log / modify_only
-
+print(f':: 🐵 存入 CSV，MODE: {MODE}')
 
 # 載入 .env
 load_dotenv(".env.setting")
@@ -92,7 +91,6 @@ for file_name in pending_files:
         name = record.get("name")
 
         # 根據模式整合資料
-        print(':: MODE:', MODE)
 
         if MODE == "overwrite":
             # 直接新增/覆寫 資料
