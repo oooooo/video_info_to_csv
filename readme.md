@@ -1,7 +1,7 @@
-# 影片轉表單
+# Video Info To CSV
 
-透過 AI 分析介紹（收容狗狗）影片，從影片口述內容，整理出每隻狗狗的（指定）基本資料（如名字、年齡或性別、個性或行為等描述），
-並產生一份類似 Excel 或 Google 試算表一樣的表單。
+透過 AI 分析（介紹收容狗狗）影片，從影片口述內容，整理出每隻狗狗的（可指定）基本資料（如名字、年齡或性別、個性或行為等描述），
+最後產生一份類似 Excel 或 Google 試算表一樣的表單。
 
 **流程**
 
@@ -12,22 +12,29 @@
 
 **資料夾結構說明**
 
-
 - `data/` 轉譯檔案暫放
   - `00_video/` 放置原始影片 (mov)
-  - `01_audio/` 放置影片抽出的音訊 (wav)
-  - `02_trans/` 放置音訊逐字稿 (srt)
-  - `03_json/` 放置結構化文字資料 (json)
+  - `01_audio/` 放置運行過程影片抽出的音訊 (wav)
+  - `02_trans/` 放置運行過程音訊逐字稿 (srt)
+  - `03_json/` 放置運行過程結構化文字資料 (json)
   - `04_csv/` 存入的 CSV 檔
-  - `finish/` 處理後的檔案將移動到此資料夾 (不分類)
-- `src/` 程式
+  - `finish/` 運行過程處理後的檔案將移動到此資料夾 (不分類)
+- `src/` 程式資料夾
 - `.env.setting` 設定資料夾變數
-- `.gitignore` 版控忽略設定
-- `main.py` 主檔案
+- `.gitignore` 版控忽略
+- `main.py` 主程式
 - `readme.md` 說明檔/本檔案
 - `requirements.txt` 專案需求套件表
 
-## 事前準備 (Tutorial for Mac)
+**主要套件列表**
+
+- Whisper（語音轉文字）`pip install git+https://github.com/openai/whisper.git`
+- google-generativeai（分析文字）`pip install google-generativeai`
+- python-dotenv（讀取 .env）`pip install python-dotenv`
+
+以下說明是以 macOS 為操作環境所寫，Windows 使用者可依概念尋找對應指令，部分開發環境或工具（如 Python, FFmpeg）則是用不同的安裝方式。
+
+## 事前準備
 
 1. 在本機安裝 FFmpeg 軟體：影片音訊抽出 (.mov ➜ .wav).
 
@@ -41,7 +48,8 @@
     # 用 Homebrew 下載安裝軟體 （需有 Homebrew）
     brew install ffmpeg
     ```
-1. 主要使用 python 開發。 請確認安裝 python。
+1. 主要使用 python 開發。 請確認安裝 python (version >= 3.11)。
+
     ```bash
     # 查看電腦上 Python 版本 （確認是否有安裝）
     python3 --version
@@ -53,6 +61,7 @@
     > Windows 前往 Python 官方網站下載最新版。 安裝過程中請**務必勾選：「Add Python 3.x to PATH」**。
 
 ## 安裝專案
+
 
 ### 1. 建立虛擬環境
 
@@ -74,9 +83,7 @@ source venv/bin/activate
 
 安裝 Python 套件（到虛擬環境）：
 ```bash
-
-# Whisper（語音轉文字）# google-generativeai（分析文字）# python-dotenv（讀取 .env）
-pip install git+https://github.com/openai/whisper.git google-generativeai python-dotenv
+pip install -r requirements.txt
 ```
 
 關閉虛擬環境指令
@@ -88,7 +95,7 @@ deactivate
 
 這裡使用 Google 的 Gemini。
 
-使用 AI 雲端服務，要申請 AI 的 API KEY (可能付費)。
+使用 AI 雲端服務，要申請 AI 的 API KEY (可能付費) 請至官網。
 API KEY 是一組帳號識別碼，為敏感資料，務必安全保管。
 
 在專案根目錄手動建立 `.env` 檔案，並設定版控忽略 `.env`，
@@ -100,21 +107,40 @@ OPENAI_API_KEY=sk-你的金鑰
 
 ## 執行專案
 
-1. 將影片放入 `data/00_video`
-2. 開啟 `main.sh`
-3. 開啟命令列 `ctrl`+ `` ` ``
-4. 命令列輸入指令執行檔案
+1. 啟動專案 python 虛擬環境
+
+    開啟命令列 `ctrl`+ `` ` `` 輸入指令
+    ```bash
+    source venv/bin/activate
+    ```
+1. 將影片放入 `data/00_video/` 資料夾
+1. 執行主檔案，在命令列輸入指令：
     ```bash
     sh main.sh
     ```
 
-#### 運行 Whisper 時遇到問題
+    若要指定從哪個流程開始：
+
+    - `1` 轉音訊開始（預設）
+    - `2` 轉字幕開始
+    - `3` 轉 JSON 開始
+    - `4` 存入 CSV.
+
+    ```bash
+    # 已有字幕檔，從轉 JSON 開始
+    sh main.sh 3
+    ```
+
+#### 運行 Whisper（Step.2）時遇到問題
 
 ```bash
+.....
 RuntimeError: Numpy is not available
 ```
-你的 NumPy 版本太新，導致 PyTorch（還有 Whisper）無法正常運作。
+你的 NumPy 版本不合，導致 PyTorch（還有 Whisper）無法正常運作。
 Whisper 是「語音轉文字的模型」，它靠 PyTorch 做神經網路運算，PyTorch 又用 NumPy 做矩陣/數字運算。
+
+安裝前確認虛擬環境 (venv) 已啟動 `source venv/bin/activate`。
 
 1. 安裝套件（到虛擬環境）：指定的 numpy 版本,
     ```bash
@@ -126,5 +152,10 @@ Whisper 是「語音轉文字的模型」，它靠 PyTorch 做神經網路運算
     ```bash
     python -c "import numpy; print(numpy.__version__)"
     ```
+3. 再次安裝 Whisper
+    ```bash
+    pip install git+https://github.com/openai/whisper.git
+    ```
+
 
 再次執行。
